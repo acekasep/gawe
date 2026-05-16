@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="id">
+
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Dashboard</title>
+
+<style>
+body{
+margin:0;
+padding:20px;
+background:#111;
+color:white;
+font-family:sans-serif;
+}
+
+input,button{
+width:100%;
+padding:12px;
+margin-bottom:10px;
+border:none;
+border-radius:8px;
+box-sizing:border-box;
+}
+
+button{
+background:#00aaff;
+color:white;
+cursor:pointer;
+}
+
+.card{
+background:#1b1b1b;
+padding:12px;
+margin-top:10px;
+border-radius:10px;
+}
+
+.card img{
+width:100%;
+max-width:240px;
+border-radius:8px;
+}
+
+.actions{
+display:flex;
+gap:10px;
+margin-top:10px;
+}
+
+.delete{background:red;}
+.edit{background:orange;}
+
+#dropzone{
+border:2px dashed #555;
+padding:15px;
+text-align:center;
+margin-bottom:10px;
+cursor:pointer;
+color:#aaa;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Dashboard Admin</h2>
+
+<input id="title" placeholder="Judul Video">
+<input id="videoUrl" placeholder="Video URL (auto jika upload)">
+<input id="thumbnailUrl" placeholder="Thumbnail (auto)">
+<input id="affiliate" placeholder="Affiliate Link">
+
+<div id="dropzone">Drag & Drop Video di sini</div>
+<input type="file" id="fileInput" hidden>
+
+<div id="previewBox" style="margin-top:10px;display:none;">
+  <img id="thumbPreview"
+  style="width:100%;max-width:250px;border-radius:8px;display:block;margin-bottom:10px;">
+
+  <p id="statusText"></p>
+
+  <button id="cancelUpload" style="background:red;">Cancel Upload</button>
+</div>
+
+<progress id="progress" value="0" max="100"></progress>
+<span id="percent">0%</span>
+
+<button id="publish">Publish</button>
+
+<hr>
+
+<h3>Daftar Video</h3>
+<div id="list"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+getAuth,
+onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+getFirestore,
+collection,
+addDoc,
+getDocs,
+deleteDoc,
+doc,
+updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+import {
+getStorage,
+ref,
+uploadBytesResumable,
+getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyBJr6cbq-1__QbRxRpjdM7K4s9iItGFLmM",
+authDomain: "ace-cms-31d92.firebaseapp.com",
+projectId: "ace-cms-31d92",
+storageBucket: "ace-cms-31d92.appspot.com",
+messagingSenderId: "33679268093",
+appId: "1:33679268093:web:96fd3b3188f22a1c034694"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const storage = getStorage(app);
+
+onAuthStateChanged(auth,(user)=>{
+if(!user) location.href="/admin";
+});
+
+let editingId = null;
+let uploadedVideoURL = "";
+let uploadedThumbURL = "";
+let uploadTaskGlobal = null;
+
+function slugGen(){
+return Math.random().toString(36).substring(2,10);
+}
+
+// ====== DOM ======
+const title = document.getElementById("title");
+const videoUrl = document.getElementById("videoUrl");
+const thumbnailUrl = document.getElementById("thumbnailUrl");
+const affiliate = document.getElementById("affiliate");
+const list = document.getElementById("list");
+
+// ====== UPLOAD ======
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+
+dropzone.onclick = ()=>fileInput.click();
+
+fileInput.onchange = e=>{
+uploadVideo(e.target.files[0]);
+};
+
+dropzone.ondragover = e=>e.preventDefault();
+
+dropzone.ondrop = e=>{
+e.preventDefault();
+uploadVideo(e.dataTransfer.files[0]);
+};
+
+async function uploadVideo(file){
+
+const progress = document.getElementById("progress");
+const percent = document.getElementById("percent");
+const previewBox = document.getElementById("previewBox");
+const thumbPreview = document.getElementById("thumbPreview");
+const statusText = document.getElementById("statusText");
+
+previewBox.style.display = "block";
+statusText.innerText = "Uploading...";
+
+const videoRef = ref(storage,"videos/"+Date.now()+file.name);
+
+uploadTaskGlobal = uploadBytesResumable(videoRef,file);
+
+uploadTaskGlobal.on("state_changed",
+
+(snapshot)=>{
+let p = (snapshot.bytesTransferred/snapshot.totalBytes)*100;
+progress.value = p;
+percent.innerText = Math.floor(p)+"%";
+},
+
+(error)=>{
+alert(error.message);
+},
+
+async ()=>{
+const url = await getDownloadURL(uploadTaskGlobal.snapshot.ref);
+
+uploadedVideoURL = url;
+
+// thumbnail
+const video = document.createElement("video");
+video.src = URL.createObjectURL(file);
+video.currentTime = 1;
+
+video.onloadeddata = async ()=>{
+
+const canvas = document.createElement("canvas");
+canvas.width = 320;
+canvas.height = 180;
+
+const ctx = canvas.getContext("2d");
+ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+canvas.toBlob(async(blob)=>{
+
+const thumbRef = ref(storage,"thumb/"+Date.now()+".jpg");
+
+await uploadBytesResumable(thumbRef,blob);
+
+const thumbURL = await getDownloadURL(thumbRef);
+
+uploadedThumbURL = thumbURL;
+thumbPreview.src = thumbURL;
+statusText.innerText = "Upload selesai ✔";
+
+});
+
+};
+
+}
+);
+}
+
+// ====== PUBLISH ======
+document.getElementById("publish").onclick = async ()=>{
+
+const slug = slugGen();
+
+const data = {
+title: title.value,
+video: uploadedVideoURL || videoUrl.value,
+thumbnail: uploadedThumbURL || thumbnailUrl.value,
+affiliate: affiliate.value,
+slug: slug,
+views: 0,
+createdAt: Date.now()
+};
+
+if(editingId){
+await updateDoc(doc(db,"videos",editingId),data);
+editingId = null;
+}else{
+await addDoc(collection(db,"videos"),data);
+}
+
+alert("Saved");
+loadVideos();
+};
+
+// ====== LOAD ======
+const BASE_URL = window.location.origin;
+
+async function loadVideos(){
+
+list.innerHTML="";
+
+const snap = await getDocs(collection(db,"videos"));
+
+snap.forEach(d=>{
+
+const v = d.data();
+
+const div = document.createElement("div");
+div.className="card";
+
+div.innerHTML=`
+<img src="${v.thumbnail}">
+<h4>${v.title}</h4>
+
+<p style="color:#aaa;font-size:12px;">
+Slug: ${v.slug}
+</p>
+
+<a href="${BASE_URL}/f/${v.slug}" target="_blank"
+style="color:#00aaff;font-size:12px;">
+${BASE_URL}/f/${v.slug}
+</a>
+
+<div class="actions">
+<button class="edit" data-id="${d.id}">Edit</button>
+<button class="delete" data-id="${d.id}">Delete</button>
+</div>
+`;
+
+list.appendChild(div);
+});
+
+}
+
+// ====== DELETE / EDIT ======
+document.addEventListener("click",async(e)=>{
+
+if(e.target.classList.contains("delete")){
+await deleteDoc(doc(db,"videos",e.target.dataset.id));
+loadVideos();
+}
+
+if(e.target.classList.contains("edit")){
+
+const id = e.target.dataset.id;
+
+const snap = await getDocs(collection(db,"videos"));
+
+snap.forEach(d=>{
+if(d.id==id){
+const v = d.data();
+
+title.value = v.title;
+videoUrl.value = v.video;
+thumbnailUrl.value = v.thumbnail;
+affiliate.value = v.affiliate;
+
+editingId = id;
+}
+});
+
+}
+
+});
+
+loadVideos();
+
+// ====== CANCEL UPLOAD ======
+document.getElementById("cancelUpload").onclick = () => {
+
+if(uploadTaskGlobal){
+uploadTaskGlobal.cancel();
+alert("Upload dibatalkan");
+}
+
+document.getElementById("progress").value = 0;
+document.getElementById("percent").innerText = "0%";
+document.getElementById("previewBox").style.display = "none";
+
+uploadedVideoURL = "";
+uploadedThumbURL = "";
+};
+
+</script>
+
+</body>
+</html>

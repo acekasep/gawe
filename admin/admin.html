@@ -1,0 +1,154 @@
+
+<!doctype html>
+<html lang="id">
+
+<head>
+
+<meta charset="utf-8">
+
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>Admin Login</title>
+
+<style>
+
+body{
+
+margin:0;
+
+background:#111;
+color:white;
+
+font-family:sans-serif;
+
+display:flex;
+justify-content:center;
+align-items:center;
+
+height:100vh;
+
+}
+
+.box{
+
+width:350px;
+
+}
+
+input,
+button{
+
+width:100%;
+
+padding:14px;
+margin-bottom:10px;
+
+border:none;
+border-radius:8px;
+
+box-sizing:border-box;
+
+}
+
+button{
+
+background:#00aaff;
+color:white;
+
+font-size:16px;
+
+cursor:pointer;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<h2>Login Admin</h2>
+
+<input
+id="email"
+type="email"
+placeholder="Email">
+
+<input
+id="password"
+type="password"
+placeholder="Password">
+
+<button id="login">
+
+Login
+
+</button>
+
+</div>
+
+<script type="module">
+
+import { initializeApp }
+from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+
+import {
+getAuth,
+signInWithEmailAndPassword
+}
+from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBJr6cbq-1__QbRxRpjdM7K4s9iItGFLmM",
+  authDomain: "ace-cms-31d92.firebaseapp.com",
+  projectId: "ace-cms-31d92",
+  storageBucket: "ace-cms-31d92.firebasestorage.app",
+  messagingSenderId: "33679268093",
+  appId: "1:33679268093:web:96fd3b3188f22a1c034694"
+};
+
+const app =
+initializeApp(firebaseConfig);
+
+const auth =
+getAuth(app);
+
+const login =
+document.getElementById('login');
+
+login.addEventListener('click', async () => {
+
+const email =
+document.getElementById('email').value;
+
+const password =
+document.getElementById('password').value;
+
+try{
+
+await signInWithEmailAndPassword(
+auth,
+email,
+password
+);
+
+alert('Login berhasil');
+
+window.location.href =
+'/admin/dashboard.html';
+
+}catch(err){
+
+alert(err.message);
+
+}
+
+});
+
+</script>
+
+</body>
+</html>
