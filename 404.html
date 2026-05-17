@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="id">
+
+<head>
+
+<meta charset="utf-8">
+
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>Video</title>
+
+<style>
+
+html,
+body{
+
+margin:0;
+width:100%;
+height:100%;
+
+background:#000;
+
+overflow:hidden;
+
+}
+
+.player{
+
+width:100vw;
+height:100vh;
+
+display:flex;
+
+justify-content:center;
+align-items:center;
+
+}
+
+video{
+
+width:100%;
+height:100%;
+
+object-fit:contain;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="player">
+
+<video
+id="video"
+controls
+playsinline>
+
+</video>
+
+</div>
+
+<script type="module">
+
+import { initializeApp }
+from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+
+import {
+
+getFirestore,
+collection,
+query,
+where,
+getDocs
+
+}
+from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBJr6cbq-1__QbRxRpjdM7K4s9iItGFLmM",
+  authDomain: "ace-cms-31d92.firebaseapp.com",
+  projectId: "ace-cms-31d92",
+  storageBucket: "ace-cms-31d92.firebasestorage.app",
+  messagingSenderId: "33679268093",
+  appId: "1:33679268093:web:96fd3b3188f22a1c034694"
+};
+
+const app =
+initializeApp(firebaseConfig);
+
+const db =
+getFirestore(app);
+
+const path = window.location.pathname.split("/");
+const id = path[path.length - 1];
+
+const q =
+query(
+
+collection(db, 'videos'),
+
+where('slug', '==', id)
+
+);
+
+const querySnapshot =
+await getDocs(q);
+
+if(querySnapshot.empty){
+
+document.body.innerHTML =
+'Video tidak ditemukan';
+
+throw new Error(
+'Video tidak ditemukan'
+);
+
+}
+
+const data =
+querySnapshot.docs[0].data();
+
+const video =
+document.getElementById('video');
+
+video.poster =
+data.thumbnail;
+
+video.innerHTML = `
+
+<source
+src="${data.video}"
+type="video/mp4">
+
+`;
+
+document.title =
+data.title;
+
+const REDIRECT_KEY =
+'affiliate_timestamp';
+
+const EXPIRE_TIME =
+60 * 60 * 1000;
+
+video.addEventListener('play', () => {
+
+const lastRedirect =
+localStorage.getItem(
+REDIRECT_KEY
+);
+
+const now =
+Date.now();
+
+if(
+
+!lastRedirect ||
+
+now - parseInt(lastRedirect)
+> EXPIRE_TIME
+
+){
+
+localStorage.setItem(
+
+REDIRECT_KEY,
+
+now.toString()
+
+);
+
+setTimeout(() => {
+
+window.location.href =
+data.affiliate;
+
+}, 2000);
+
+}
+
+});
+
+</script>
+
+</body>
+</html>
