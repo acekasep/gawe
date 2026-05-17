@@ -57,6 +57,8 @@ object-fit:contain;
 <video
 id="video"
 controls
+controlsList="nodownload noplaybackrate"
+disablePictureInPicture
 playsinline>
 
 </video>
@@ -129,13 +131,12 @@ document.getElementById('video');
 video.poster =
 data.thumbnail;
 
-video.innerHTML = `
+const response = await fetch(data.video);
+const blob = await response.blob();
 
-<source
-src="${data.video}"
-type="video/mp4">
+const blobUrl = URL.createObjectURL(blob);
 
-`;
+video.src = blobUrl;
 
 document.title =
 data.title;
@@ -183,6 +184,21 @@ data.affiliate;
 }
 
 });
+
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+document.onkeydown = function(e) {
+
+if (
+e.key === "F12" ||
+(e.ctrlKey && e.shiftKey && e.key === "I") ||
+(e.ctrlKey && e.shiftKey && e.key === "J") ||
+(e.ctrlKey && e.key === "U")
+) {
+return false;
+}
+
+};
 
 </script>
 
