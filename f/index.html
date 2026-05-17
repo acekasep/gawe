@@ -9,7 +9,7 @@
 content="width=device-width,initial-scale=1">
 
 <title>Video</title>
-
+<meta name="theme-color" content="#000000">
 <style>
 
 html,
@@ -28,12 +28,15 @@ overflow:hidden;
 .player{
 
 width:100vw;
-height:100vh;
+height:100dvh;
 
 display:flex;
 
 justify-content:center;
 align-items:center;
+
+padding-bottom:20px;
+box-sizing:border-box;
 
 }
 
@@ -43,6 +46,8 @@ width:100%;
 height:100%;
 
 object-fit:contain;
+
+padding-bottom:env(safe-area-inset-bottom);
 
 }
 
