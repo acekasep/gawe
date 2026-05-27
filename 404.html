@@ -136,12 +136,13 @@ document.getElementById('video');
 video.poster =
 data.thumbnail;
 
-const response = await fetch(data.video);
-const blob = await response.blob();
+video.innerHTML = `
 
-const blobUrl = URL.createObjectURL(blob);
+<source
+src="${data.video}"
+type="video/mp4">
 
-video.src = blobUrl;
+`;
 
 document.title =
 data.title;
