@@ -147,7 +147,23 @@ type="video/mp4">
 document.title =
 data.title;
 
+let redirected = false;
+
+window.addEventListener("pageshow", (event) => {
+
+if(event.persisted){
+redirected = true;
+}
+
+});
+
 video.addEventListener('play', () => {
+
+if(redirected){
+return;
+}
+
+redirected = true;
 
 setTimeout(() => {
 
