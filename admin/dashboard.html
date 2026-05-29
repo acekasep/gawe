@@ -271,7 +271,12 @@ list.innerHTML="";
 
 const snap = await getDocs(collection(db,"videos"));
 
-snap.forEach(d=>{
+const docs = snap.docs.sort(
+(a,b)=>
+b.data().createdAt - a.data().createdAt
+);
+
+docs.forEach(d=>{
 
 const v = d.data();
 

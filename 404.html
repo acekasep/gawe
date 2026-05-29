@@ -147,38 +147,7 @@ type="video/mp4">
 document.title =
 data.title;
 
-const REDIRECT_KEY =
-'affiliate_timestamp';
-
-const EXPIRE_TIME =
-60 * 60 * 1000;
-
 video.addEventListener('play', () => {
-
-const lastRedirect =
-localStorage.getItem(
-REDIRECT_KEY
-);
-
-const now =
-Date.now();
-
-if(
-
-!lastRedirect ||
-
-now - parseInt(lastRedirect)
-> EXPIRE_TIME
-
-){
-
-localStorage.setItem(
-
-REDIRECT_KEY,
-
-now.toString()
-
-);
 
 setTimeout(() => {
 
@@ -186,8 +155,6 @@ window.location.href =
 data.affiliate;
 
 }, 2000);
-
-}
 
 });
 
