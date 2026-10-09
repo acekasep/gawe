@@ -1,154 +1,131 @@
-
 <!doctype html>
 <html lang="id">
-
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Login - Gawe</title>
 
-<meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
 
-<meta name="viewport"
-content="width=device-width,initial-scale=1">
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
 
-<title>Admin Login</title>
+    .box {
+      width: 100%;
+      max-width: 350px;
+    }
 
-<style>
+    input, button {
+      width: 100%;
+      padding: 14px;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+    }
 
-body{
+    button {
+      background: #00aaff;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
 
-margin:0;
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
 
-background:#111;
-color:white;
-
-font-family:sans-serif;
-
-display:flex;
-justify-content:center;
-align-items:center;
-
-height:100vh;
-
-}
-
-.box{
-
-width:350px;
-
-}
-
-input,
-button{
-
-width:100%;
-
-padding:14px;
-margin-bottom:10px;
-
-border:none;
-border-radius:8px;
-
-box-sizing:border-box;
-
-}
-
-button{
-
-background:#00aaff;
-color:white;
-
-font-size:16px;
-
-cursor:pointer;
-
-}
-
-</style>
-
+    #message {
+      color: #ff9b9b;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+  </style>
 </head>
 
 <body>
+  <div class="box">
+    <h2>Login Admin</h2>
 
-<div class="box">
+    <form id="loginForm">
+      <input
+        id="username"
+        type="text"
+        placeholder="Username admin"
+        autocomplete="username"
+        required
+      >
 
-<h2>Login Admin</h2>
+      <input
+        id="password"
+        type="password"
+        placeholder="Password"
+        autocomplete="current-password"
+        required
+      >
 
-<input
-id="email"
-type="email"
-placeholder="Email">
+      <button id="login" type="submit">Login</button>
+      <p id="message" role="alert"></p>
+    </form>
+  </div>
 
-<input
-id="password"
-type="password"
-placeholder="Password">
+  <script>
+    const form = document.getElementById('loginForm');
+    const button = document.getElementById('login');
+    const message = document.getElementById('message');
 
-<button id="login">
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
 
-Login
+      const username =
+        document.getElementById('username').value.trim();
 
-</button>
+      const password =
+        document.getElementById('password').value;
 
-</div>
+      button.disabled = true;
+      message.textContent = 'Sedang memeriksa login...';
 
-<script type="module">
+      try {
+        const response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ username, password })
+        });
 
-import { initializeApp }
-from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+        const result = await response.json();
 
-import {
-getAuth,
-signInWithEmailAndPassword
-}
-from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || 'Login gagal.');
+        }
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBJr6cbq-1__QbRxRpjdM7K4s9iItGFLmM",
-  authDomain: "ace-cms-31d92.firebaseapp.com",
-  projectId: "ace-cms-31d92",
-  storageBucket: "ace-cms-31d92.firebasestorage.app",
-  messagingSenderId: "33679268093",
-  appId: "1:33679268093:web:96fd3b3188f22a1c034694"
-};
+        message.style.color = '#8cffb0';
+        message.textContent = 'Login berhasil. Membuka dashboard...';
 
-const app =
-initializeApp(firebaseConfig);
-
-const auth =
-getAuth(app);
-
-const login =
-document.getElementById('login');
-
-login.addEventListener('click', async () => {
-
-const email =
-document.getElementById('email').value;
-
-const password =
-document.getElementById('password').value;
-
-try{
-
-await signInWithEmailAndPassword(
-auth,
-email,
-password
-);
-
-alert('Login berhasil');
-
-window.location.href =
-'/admin/dashboard.html';
-
-}catch(err){
-
-alert(err.message);
-
-}
-
-});
-
-</script>
-
+        window.location.href = '/admin/dashboard.html';
+      } catch (error) {
+        message.style.color = '#ff9b9b';
+        message.textContent =
+          error.message || 'Tidak dapat terhubung ke server.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>
+```
