@@ -5,44 +5,57 @@ import {
 } from "../../_lib/admin-auth.js";
 
 export async function onRequestPost({ request, env }) {
+  // 1. Pastikan konfigurasi tersedia.
   if (!env.DB || !env.ADMIN_SETUP_KEY) {
     return jsonResponse(
-      { ok: false, error: "Konfigurasi server belum lengkap." },
+      {
+        ok: false,
+        error: "Konfigurasi server belum lengkap.",
+      },
       500
     );
   }
 
-  const suppliedKey = request.headers.get("X-Admin-Setup-Key") || "";
+  // 2. Validasi kunci setup.
+  const suppliedKey =
+    request.headers.get("X-Admin-Setup-Key") || "";
 
-  // Periksa kunci setup tanpa pernah menampilkan nilainya.
   if (
     suppliedKey.length !== env.ADMIN_SETUP_KEY.length ||
     suppliedKey !== env.ADMIN_SETUP_KEY
   ) {
     return jsonResponse(
-      { ok: false, error: "Kunci setup tidak valid." },
+      {
+        ok: false,
+        error: "Kunci setup tidak valid.",
+      },
       403
     );
   }
 
+  // 3. Baca JSON request.
   let body;
 
   try {
     body = await request.json();
   } catch {
     return jsonResponse(
-      { ok: false, error: "Body harus berupa JSON yang valid." },
+      {
+        ok: false,
+        error: "Body harus berupa JSON yang valid.",
+      },
       400
     );
   }
 
+  // 4. Validasi username dan password.
   const username =
-    typeof body.username === "string"
+    typeof body?.username === "string"
       ? body.username.trim().toLowerCase()
       : "";
 
   const password =
-    typeof body.password === "string"
+    typeof body?.password === "string"
       ? body.password
       : "";
 
@@ -50,7 +63,8 @@ export async function onRequestPost({ request, env }) {
     return jsonResponse(
       {
         ok: false,
-        error: "Username harus 3–32 karakter: huruf kecil, angka, atau underscore.",
+        error:
+          "Username harus 3–32 karakter: huruf kecil, angka, atau underscore.",
       },
       400
     );
@@ -65,6 +79,9 @@ export async function onRequestPost({ request, env }) {
       400
     );
   }
+
+  // 5. Jalankan proses setup dan catat tahap kegagalan.
+  let stage = "cek-admin";
 
   try {
     const existing = await env.DB
@@ -81,8 +98,12 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
+    stage = "hash-password";
+
     const id = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
+
+    stage = "simpan-admin";
 
     const result = await env.DB
       .prepare(
@@ -93,11 +114,12 @@ export async function onRequestPost({ request, env }) {
       .bind(id, username, passwordHash)
       .run();
 
-    if (!result.meta?.changes) {
+    if (!result.meta || result.meta.changes !== 1) {
       return jsonResponse(
         {
           ok: false,
-          error: "Admin sudah terdaftar. Pendaftaran awal ditutup.",
+          error:
+            "Admin tidak dibuat. Mungkin admin sudah terdaftar.",
         },
         409
       );
@@ -106,15 +128,28 @@ export async function onRequestPost({ request, env }) {
     return jsonResponse(
       {
         ok: true,
-        message: "Admin pertama berhasil dibuat. Simpan username dan password dengan aman.",
+        message:
+          "Admin pertama berhasil dibuat. Simpan username dan password dengan aman.",
       },
       201
     );
-  
   } catch (error) {
-    console.error("ADMIN_SETUP_ERROR:", error?.message || String(error));
+    // Detail error hanya masuk log server, bukan respons publik.
+    console.error(
+      "ADMIN_SETUP_ERROR",
+      JSON.stringify({
+        stage,
+        name: error?.name || "Error",
+        message: error?.message || "Unknown error",
+      })
+    );
+
     return jsonResponse(
-      { ok: false, error: "Pendaftaran gagal. Periksa Logs di Cloudflare." },
+      {
+        ok: false,
+        error: "Pendaftaran gagal.",
+        stage,
+      },
       500
     );
   }
