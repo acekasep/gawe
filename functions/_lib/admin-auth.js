@@ -2,33 +2,40 @@
 const ITERATIONS = 310000;
 
 function toHex(bytes) {
-  return Array.from(bytes, (b) =>
-    b.toString(16).padStart(2, "0")
+  return Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0")
   ).join("");
 }
 
 function fromHex(hex) {
-  if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) {
+  if (
+    typeof hex !== "string" ||
+    !/^(?:[0-9a-f]{2})+$/i.test(hex)
+  ) {
     throw new Error("Invalid hex");
   }
 
   return new Uint8Array(
-    hex.match(/.{2}/g).map((b) => parseInt(b, 16))
+    hex.match(/.{2}/g).map((byte) => parseInt(byte, 16))
   );
 }
 
 async function derivePassword(password, salt, iterations) {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("Web Crypto API tidak tersedia");
+  }
+
   const encoder = new TextEncoder();
 
-  const key = await crypto.subtle.importKey(
+  const key = await globalThis.crypto.subtle.importKey(
     "raw",
     encoder.encode(password),
-    "PBKDF2",
+    { name: "PBKDF2" },
     false,
     ["deriveBits"]
   );
 
-  const bits = await crypto.subtle.deriveBits(
+  const bits = await globalThis.crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
       hash: "SHA-256",
@@ -43,8 +50,15 @@ async function derivePassword(password, salt, iterations) {
 }
 
 export async function hashPassword(password) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await derivePassword(password, salt, ITERATIONS);
+  const salt = globalThis.crypto.getRandomValues(
+    new Uint8Array(16)
+  );
+
+  const hash = await derivePassword(
+    password,
+    salt,
+    ITERATIONS
+  );
 
   return `pbkdf2$${ITERATIONS}$${toHex(salt)}$${toHex(hash)}`;
 }
@@ -69,7 +83,13 @@ export async function verifyPassword(password, stored) {
     const salt = fromHex(saltHex);
     const expected = fromHex(hashHex);
 
-    const actual = await derivePassword(password, salt, iterations);
+    if (expected.length !== 32) return false;
+
+    const actual = await derivePassword(
+      password,
+      salt,
+      iterations
+    );
 
     if (actual.length !== expected.length) return false;
 
@@ -86,7 +106,7 @@ export async function verifyPassword(password, stored) {
 }
 
 export async function sha256Hex(value) {
-  const digest = await crypto.subtle.digest(
+  const digest = await globalThis.crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(value)
   );
