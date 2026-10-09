@@ -110,9 +110,11 @@ export async function onRequestPost({ request, env }) {
       },
       201
     );
-  } catch {
+  
+  } catch (error) {
+    console.error("ADMIN_SETUP_ERROR:", error?.message || String(error));
     return jsonResponse(
-      { ok: false, error: "Pendaftaran gagal. Periksa konfigurasi database." },
+      { ok: false, error: "Pendaftaran gagal. Periksa Logs di Cloudflare." },
       500
     );
   }
