@@ -133,14 +133,14 @@ export async function onRequestPost({ request, env }) {
       },
       201
     );
-  } catch (error) {
-    // Detail error hanya masuk log server, bukan respons publik.
+ } catch (error) {
     console.error(
       "ADMIN_SETUP_ERROR",
       JSON.stringify({
         stage,
-        name: error?.name || "Error",
-        message: error?.message || "Unknown error",
+        name: error?.name || "UnknownError",
+        message: error?.message || String(error),
+        stack: error?.stack || null,
       })
     );
 
@@ -149,6 +149,8 @@ export async function onRequestPost({ request, env }) {
         ok: false,
         error: "Pendaftaran gagal.",
         stage,
+        reason: error?.message || "Unknown error",
+        errorType: error?.name || "UnknownError",
       },
       500
     );
