@@ -1,0 +1,20 @@
+
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "gawe-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-09",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cms-video-db",
+      "database_id": "a10377f2-98fc-4d57-8538-78c1b8906faa"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "VIDEOS",
+      "bucket_name": "gawe"
+    }
+  ]
+}
