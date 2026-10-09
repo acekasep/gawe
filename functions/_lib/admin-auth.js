@@ -1,5 +1,5 @@
 
-const ITERATIONS = 310000;
+const ITERATIONS = 100000;
 
 function toHex(bytes) {
   return Array.from(bytes, (byte) =>
