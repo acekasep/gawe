@@ -1,195 +1,129 @@
+
 <!doctype html>
 <html lang="id">
-
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <title>Video</title>
 
-<meta charset="utf-8">
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
 
-<meta name="viewport"
-content="width=device-width,initial-scale=1">
+    .player {
+      width: 100vw;
+      height: 100dvh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-sizing: border-box;
+      padding-bottom: 20px;
+    }
 
-<title>Video</title>
-<meta name="theme-color" content="#000000">
-<style>
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
 
-html,
-body{
-
-margin:0;
-width:100%;
-height:100%;
-
-background:#000;
-
-overflow:hidden;
-
-}
-
-.player{
-
-width:100vw;
-height:100dvh;
-
-display:flex;
-
-justify-content:center;
-align-items:center;
-
-padding-bottom:20px;
-box-sizing:border-box;
-
-}
-
-video{
-
-width:100%;
-height:100%;
-
-object-fit:contain;
-
-padding-bottom:env(safe-area-inset-bottom);
-
-}
-
-</style>
-
+    #message {
+      color: #fff;
+      font: 16px Arial, sans-serif;
+      padding: 24px;
+      text-align: center;
+    }
+  </style>
 </head>
 
 <body>
+  <div class="player">
+    <video
+      id="video"
+      controls
+      controlsList="nodownload noplaybackrate"
+      disablePictureInPicture
+      playsinline
+      preload="metadata">
+    </video>
+    <div id="message" hidden>Memuat video...</div>
+  </div>
 
-<div class="player">
+  <script>
+    (async () => {
+      const video = document.getElementById("video");
+      const message = document.getElementById("message");
 
-<video
-id="video"
-controls
-controlsList="nodownload noplaybackrate"
-disablePictureInPicture
-playsinline>
+      function showError(text) {
+        video.style.display = "none";
+        message.hidden = false;
+        message.textContent = text;
+      }
 
-</video>
+      const parts = location.pathname.split("/").filter(Boolean);
+      const slug = parts[parts.length - 1];
 
-</div>
+      if (!slug || slug === "f") {
+        showError("Link video tidak valid.");
+        return;
+      }
 
-<script type="module">
+      try {
+        const response = await fetch(
+          `/api/video?slug=${encodeURIComponent(slug)}`
+        );
 
-import { initializeApp }
-from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+        const result = await response.json();
 
-import {
+        if (!response.ok || !result.ok || !result.video) {
+          showError(result.error || "Video tidak ditemukan.");
+          return;
+        }
 
-getFirestore,
-collection,
-query,
-where,
-getDocs
+        const data = result.video;
 
-}
-from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+        document.title = data.title || "Video";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBJr6cbq-1__QbRxRpjdM7K4s9iItGFLmM",
-  authDomain: "ace-cms-31d92.firebaseapp.com",
-  projectId: "ace-cms-31d92",
-  storageBucket: "ace-cms-31d92.firebasestorage.app",
-  messagingSenderId: "33679268093",
-  appId: "1:33679268093:web:96fd3b3188f22a1c034694"
-};
+        if (data.thumbnail) {
+          video.poster = data.thumbnail;
+        }
 
-const app =
-initializeApp(firebaseConfig);
+        video.src = data.video;
 
-const db =
-getFirestore(app);
+        video.addEventListener("error", () => {
+          showError("Video gagal dimuat. Silakan coba lagi.");
+        });
 
-const path = window.location.pathname.split("/");
-const id = path[path.length - 1];
+        let redirected = false;
 
-const q =
-query(
+        video.addEventListener("play", () => {
+          if (redirected || !data.affiliate) return;
 
-collection(db, 'videos'),
+          redirected = true;
 
-where('slug', '==', id)
+          setTimeout(() => {
+            try {
+              const affiliateUrl = new URL(data.affiliate);
 
-);
-
-const querySnapshot =
-await getDocs(q);
-
-if(querySnapshot.empty){
-
-document.body.innerHTML =
-'Video tidak ditemukan';
-
-throw new Error(
-'Video tidak ditemukan'
-);
-
-}
-
-const data =
-querySnapshot.docs[0].data();
-
-const video =
-document.getElementById('video');
-
-video.poster =
-data.thumbnail;
-
-video.innerHTML = `
-
-<source
-src="${data.video}"
-type="video/mp4">
-
-`;
-
-document.title =
-data.title;
-
-let redirected = false;
-
-window.addEventListener("pageshow", (event) => {
-
-if(event.persisted){
-redirected = true;
-}
-
-});
-
-video.addEventListener('play', () => {
-
-if(redirected){
-return;
-}
-
-redirected = true;
-
-setTimeout(() => {
-
-window.location.href =
-data.affiliate;
-
-}, 2000);
-
-});
-
-document.addEventListener("contextmenu", e => e.preventDefault());
-
-document.onkeydown = function(e) {
-
-if (
-e.key === "F12" ||
-(e.ctrlKey && e.shiftKey && e.key === "I") ||
-(e.ctrlKey && e.shiftKey && e.key === "J") ||
-(e.ctrlKey && e.key === "U")
-) {
-return false;
-}
-
-};
-
-</script>
-
+              if (["http:", "https:"].includes(affiliateUrl.protocol)) {
+                location.href = affiliateUrl.href;
+              }
+            } catch (error) {
+              console.error("URL affiliate tidak valid:", error);
+            }
+          }, 2000);
+        });
+      } catch (error) {
+        console.error(error);
+        showError("Terjadi kesalahan saat memuat video.");
+      }
+    })();
+  </script>
 </body>
 </html>
