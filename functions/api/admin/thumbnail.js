@@ -87,3 +87,47 @@ export async function onRequestPost({ request, env }) {
     );
   }
 }
+
+
+export async function onRequestGet({ request, env }) {
+  const auth = await requireAdmin(request, env);
+  if (auth.response) return auth.response;
+
+  const url = new URL(request.url);
+  const key = url.searchParams.get("key");
+
+  if (
+    !key ||
+    !/^thumbnails\/[a-f0-9-]{36}\.(jpg|png|webp)$/i.test(key)
+  ) {
+    return jsonResponse(
+      { ok: false, error: "Key thumbnail tidak valid." },
+      400
+    );
+  }
+
+  try {
+    const object = await env.VIDEOS.get(key);
+
+    if (!object) {
+      return jsonResponse(
+        { ok: false, error: "Thumbnail tidak ditemukan." },
+        404
+      );
+    }
+
+    return new Response(object.body, {
+      headers: {
+        "Content-Type": object.httpMetadata?.contentType || "image/jpeg",
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    console.error("THUMBNAIL_READ_ERROR", error?.name || "UnknownError");
+    return jsonResponse(
+      { ok: false, error: "Gagal membaca thumbnail." },
+      500
+    );
+  }
+}
