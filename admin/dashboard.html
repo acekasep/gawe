@@ -94,269 +94,556 @@ color:#aaa;
 <h3>Daftar Video</h3>
 <div id="list"></div>
 
+
 <script type="module">
+const $ = (id) => document.getElementById(id);
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-getAuth,
-onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-import {
-getFirestore,
-collection,
-addDoc,
-getDocs,
-deleteDoc,
-doc,
-updateDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-import {
-getStorage,
-ref,
-uploadBytesResumable,
-getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-
-const firebaseConfig = {
-apiKey: "AIzaSyBJr6cbq-1__QbRxRpjdM7K4s9iItGFLmM",
-authDomain: "ace-cms-31d92.firebaseapp.com",
-projectId: "ace-cms-31d92",
-storageBucket: "ace-cms-31d92.appspot.com",
-messagingSenderId: "33679268093",
-appId: "1:33679268093:web:96fd3b3188f22a1c034694"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const storage = getStorage(app);
-
-onAuthStateChanged(auth,(user)=>{
-if(!user) location.href="/admin";
-});
+const titleInput = $("title");
+const videoUrlInput = $("videoUrl");
+const thumbnailUrlInput = $("thumbnailUrl");
+const affiliateInput = $("affiliate");
+const list = $("list");
+const dropzone = $("dropzone");
+const fileInput = $("fileInput");
+const progress = $("progress");
+const percent = $("percent");
+const previewBox = $("previewBox");
+const thumbPreview = $("thumbPreview");
+const statusText = $("statusText");
+const publishButton = $("publish");
+const cancelButton = $("cancelUpload");
 
 let editingId = null;
-let uploadedVideoURL = "";
-let uploadedThumbURL = "";
-let uploadTaskGlobal = null;
+let uploadedVideoKey = "";
+let uploadedThumbnailKey = "";
+let currentUpload = null;
+let cancelRequested = false;
+let videosCache = [];
 
-function slugGen(){
-return Math.random().toString(36).substring(2,10);
+videoUrlInput.readOnly = true;
+thumbnailUrlInput.readOnly = true;
+videoUrlInput.placeholder = "Key video R2 (otomatis setelah upload)";
+thumbnailUrlInput.placeholder = "Key thumbnail R2 (otomatis)";
+cancelButton.style.display = "none";
+
+function escapeHTML(value = "") {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
 }
 
-// ====== DOM ======
-const title = document.getElementById("title");
-const videoUrl = document.getElementById("videoUrl");
-const thumbnailUrl = document.getElementById("thumbnailUrl");
-const affiliate = document.getElementById("affiliate");
-const list = document.getElementById("list");
+async function api(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options
+  });
 
-// ====== UPLOAD ======
-const dropzone = document.getElementById("dropzone");
-const fileInput = document.getElementById("fileInput");
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json")
+    ? await response.json()
+    : null;
 
-dropzone.onclick = ()=>fileInput.click();
+  if (response.status === 401 || response.status === 403) {
+    location.href = "/admin/admin.html";
+    throw new Error("Sesi admin tidak valid. Silakan login kembali.");
+  }
 
-fileInput.onchange = e=>{
-uploadVideo(e.target.files[0]);
-};
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.error || `Permintaan gagal (${response.status})`);
+  }
 
-dropzone.ondragover = e=>e.preventDefault();
+  return data;
+}
 
-dropzone.ondrop = e=>{
-e.preventDefault();
-uploadVideo(e.dataTransfer.files[0]);
-};
+function makeSlug() {
+  return crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+}
 
-async function uploadVideo(file){
+function resetForm() {
+  editingId = null;
+  uploadedVideoKey = "";
+  uploadedThumbnailKey = "";
+  titleInput.value = "";
+  videoUrlInput.value = "";
+  thumbnailUrlInput.value = "";
+  affiliateInput.value = "";
+  publishButton.textContent = "Publish";
+}
 
-const progress = document.getElementById("progress");
-const percent = document.getElementById("percent");
-const previewBox = document.getElementById("previewBox");
-const thumbPreview = document.getElementById("thumbPreview");
-const statusText = document.getElementById("statusText");
+function setProgress(value) {
+  const safeValue = Math.max(0, Math.min(100, value));
+  progress.value = safeValue;
+  percent.textContent = `${Math.floor(safeValue)}%`;
+}
 
-previewBox.style.display = "block";
-statusText.innerText = "Uploading...";
+async function createThumbnail(file) {
+  const objectURL = URL.createObjectURL(file);
 
-const videoRef = ref(storage,"videos/"+Date.now()+file.name);
+  try {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = objectURL;
 
-uploadTaskGlobal = uploadBytesResumable(videoRef,file);
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = resolve;
+      video.onerror = () => reject(
+        new Error("Video tidak bisa dibaca untuk membuat thumbnail.")
+      );
+    });
 
-uploadTaskGlobal.on("state_changed",
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const seekTo = duration > 1 ? Math.min(1, duration / 2) : 0;
 
-(snapshot)=>{
-let p = (snapshot.bytesTransferred/snapshot.totalBytes)*100;
-progress.value = p;
-percent.innerText = Math.floor(p)+"%";
-},
+    if (seekTo > 0) {
+      await new Promise((resolve, reject) => {
+        video.onseeked = resolve;
+        video.onerror = () => reject(
+          new Error("Gagal mengambil gambar dari video.")
+        );
+        video.currentTime = seekTo;
+      });
+    } else {
+      await new Promise((resolve, reject) => {
+        video.onloadeddata = resolve;
+        video.onerror = () => reject(
+          new Error("Gagal membaca frame video.")
+        );
+      });
+    }
 
-(error)=>{
-alert(error.message);
-},
+    const canvas = document.createElement("canvas");
+    const width = 640;
+    const height = 360;
 
-async ()=>{
-const url = await getDownloadURL(uploadTaskGlobal.snapshot.ref);
+    canvas.width = width;
+    canvas.height = height;
 
-uploadedVideoURL = url;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas tidak tersedia.");
 
-// thumbnail
-const video = document.createElement("video");
-video.src = URL.createObjectURL(file);
-video.currentTime = 1;
+    context.fillStyle = "#111";
+    context.fillRect(0, 0, width, height);
 
-video.onloadeddata = async ()=>{
+    const ratio = Math.min(
+      width / video.videoWidth,
+      height / video.videoHeight
+    );
 
-const canvas = document.createElement("canvas");
-canvas.width = 320;
-canvas.height = 180;
+    const drawWidth = video.videoWidth * ratio;
+    const drawHeight = video.videoHeight * ratio;
 
-const ctx = canvas.getContext("2d");
-ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    context.drawImage(
+      video,
+      (width - drawWidth) / 2,
+      (height - drawHeight) / 2,
+      drawWidth,
+      drawHeight
+    );
 
-canvas.toBlob(async(blob)=>{
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Gagal membuat file thumbnail."));
+      }, "image/jpeg", 0.85);
+    });
+  } finally {
+    URL.revokeObjectURL(objectURL);
+  }
+}
 
-const thumbRef = ref(storage,"thumb/"+Date.now()+".jpg");
+function uploadPart(url, blob, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    currentUpload.xhr = xhr;
 
-await uploadBytesResumable(thumbRef,blob);
+    xhr.open("PUT", url);
+    xhr.withCredentials = true;
 
-const thumbURL = await getDownloadURL(thumbRef);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total);
+    };
 
-uploadedThumbURL = thumbURL;
-thumbPreview.src = thumbURL;
-statusText.innerText = "Upload selesai ✔";
+    xhr.onload = () => {
+      let data;
 
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        reject(new Error("Respons upload tidak valid."));
+        return;
+      }
+
+      if (xhr.status < 200 || xhr.status >= 300 || data.ok === false) {
+        reject(new Error(data.error || `Upload gagal (${xhr.status})`));
+        return;
+      }
+
+      const etag = data.etag || data.part?.etag;
+      const partNumber = data.partNumber || data.part?.partNumber;
+
+      if (!etag) {
+        reject(new Error("Server tidak mengembalikan ETag untuk bagian video."));
+        return;
+      }
+
+      resolve({ partNumber: partNumber || null, etag });
+    };
+
+    xhr.onerror = () => reject(new Error("Koneksi upload terputus."));
+    xhr.onabort = () => reject(new Error("Upload dibatalkan."));
+    xhr.send(blob);
+  });
+}
+
+async function uploadVideo(file) {
+  if (!file) return;
+
+  if (currentUpload) {
+    alert("Tunggu sampai proses upload sebelumnya selesai atau dibatalkan.");
+    return;
+  }
+
+  if (!file.type.startsWith("video/")) {
+    alert("Pilih file video yang valid.");
+    return;
+  }
+
+  if (file.size > 1024 * 1024 * 1024) {
+    alert("Ukuran video maksimal 1 GB.");
+    return;
+  }
+
+  cancelRequested = false;
+  currentUpload = { xhr: null, key: "", uploadId: "" };
+
+  previewBox.style.display = "block";
+  cancelButton.style.display = "block";
+  dropzone.style.pointerEvents = "none";
+  statusText.textContent = "Menyiapkan upload...";
+  setProgress(0);
+
+  let completed = false;
+
+  try {
+    const start = await api("/api/admin/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "start",
+        filename: file.name,
+        size: file.size,
+        contentType: file.type
+      })
+    });
+
+    currentUpload.key = start.key;
+    currentUpload.uploadId = start.uploadId;
+
+    if (!start.key || !start.uploadId || !start.partSize) {
+      throw new Error("Server tidak memberikan informasi multipart upload yang lengkap.");
+    }
+
+    const parts = [];
+    const totalParts = Math.ceil(file.size / start.partSize);
+    let uploadedBytes = 0;
+
+    for (let index = 0; index < totalParts; index++) {
+      if (cancelRequested) throw new Error("Upload dibatalkan.");
+
+      const partNumber = index + 1;
+      const begin = index * start.partSize;
+      const end = Math.min(begin + start.partSize, file.size);
+      const chunk = file.slice(begin, end);
+
+      statusText.textContent = `Mengupload bagian ${partNumber}/${totalParts}...`;
+
+      const result = await uploadPart(
+        `/api/admin/upload?action=part&key=${encodeURIComponent(start.key)}&uploadId=${encodeURIComponent(start.uploadId)}&partNumber=${partNumber}`,
+        chunk,
+        (loaded) => {
+          setProgress(((uploadedBytes + loaded) / file.size) * 100);
+        }
+      );
+
+      if (cancelRequested) throw new Error("Upload dibatalkan.");
+
+      parts.push({
+        partNumber,
+        etag: result.etag
+      });
+
+      uploadedBytes += chunk.size;
+      setProgress((uploadedBytes / file.size) * 100);
+    }
+
+    statusText.textContent = "Menyelesaikan upload...";
+    await api("/api/admin/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "complete",
+        key: start.key,
+        uploadId: start.uploadId,
+        parts
+      })
+    });
+
+    uploadedVideoKey = start.key;
+    videoUrlInput.value = start.key;
+    completed = true;
+
+    statusText.textContent = "Video berhasil diupload. Membuat thumbnail...";
+
+    const thumbnailBlob = await createThumbnail(file);
+    const formData = new FormData();
+    formData.append("file", thumbnailBlob, "thumbnail.jpg");
+
+    const thumbResult = await api("/api/admin/thumbnail", {
+      method: "POST",
+      body: formData
+    });
+
+    uploadedThumbnailKey = thumbResult.key;
+    thumbnailUrlInput.value = thumbResult.key;
+
+    thumbPreview.src =
+      `/api/admin/thumbnail?key=${encodeURIComponent(thumbResult.key)}`;
+
+    statusText.textContent = "Upload video dan thumbnail selesai.";
+    setProgress(100);
+  } catch (error) {
+    if (!completed && currentUpload?.key && currentUpload?.uploadId) {
+      try {
+        await api("/api/admin/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "abort",
+            key: currentUpload.key,
+            uploadId: currentUpload.uploadId
+          })
+        });
+      } catch (abortError) {
+        console.warn("Multipart upload cleanup gagal:", abortError);
+      }
+    }
+
+    statusText.textContent = error.message;
+    if (!cancelRequested) alert(error.message);
+  } finally {
+    currentUpload = null;
+    cancelRequested = false;
+    cancelButton.style.display = "none";
+    dropzone.style.pointerEvents = "";
+    fileInput.value = "";
+  }
+}
+
+dropzone.addEventListener("click", () => fileInput.click());
+
+dropzone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  dropzone.style.borderColor = "#00aaff";
 });
 
-};
-
-}
-);
-}
-
-// ====== PUBLISH ======
-document.getElementById("publish").onclick = async ()=>{
-
-const slug = slugGen();
-
-const data = {
-title: title.value,
-video: uploadedVideoURL || videoUrl.value,
-thumbnail: uploadedThumbURL || thumbnailUrl.value,
-affiliate: affiliate.value,
-slug: slug,
-views: 0,
-createdAt: Date.now()
-};
-
-if(editingId){
-await updateDoc(doc(db,"videos",editingId),data);
-editingId = null;
-}else{
-await addDoc(collection(db,"videos"),data);
-}
-
-alert("Saved");
-loadVideos();
-};
-
-// ====== LOAD ======
-const BASE_URL = window.location.origin;
-
-async function loadVideos(){
-
-list.innerHTML="";
-
-const snap = await getDocs(collection(db,"videos"));
-
-const docs = snap.docs.sort(
-(a,b)=>
-b.data().createdAt - a.data().createdAt
-);
-
-docs.forEach(d=>{
-
-const v = d.data();
-
-const div = document.createElement("div");
-div.className="card";
-
-div.innerHTML=`
-<img src="${v.thumbnail}">
-<h4>${v.title}</h4>
-
-<p style="color:#aaa;font-size:12px;">
-Slug: ${v.slug}
-</p>
-
-<a href="${BASE_URL}/f/${v.slug}" target="_blank"
-style="color:#00aaff;font-size:12px;">
-${BASE_URL}/f/${v.slug}
-</a>
-
-<div class="actions">
-<button class="edit" data-id="${d.id}">Edit</button>
-<button class="delete" data-id="${d.id}">Delete</button>
-</div>
-`;
-
-list.appendChild(div);
+dropzone.addEventListener("dragleave", () => {
+  dropzone.style.borderColor = "";
 });
 
-}
+dropzone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dropzone.style.borderColor = "";
 
-// ====== DELETE / EDIT ======
-document.addEventListener("click",async(e)=>{
-
-if(e.target.classList.contains("delete")){
-await deleteDoc(doc(db,"videos",e.target.dataset.id));
-loadVideos();
-}
-
-if(e.target.classList.contains("edit")){
-
-const id = e.target.dataset.id;
-
-const snap = await getDocs(collection(db,"videos"));
-
-snap.forEach(d=>{
-if(d.id==id){
-const v = d.data();
-
-title.value = v.title;
-videoUrl.value = v.video;
-thumbnailUrl.value = v.thumbnail;
-affiliate.value = v.affiliate;
-
-editingId = id;
-}
+  if (event.dataTransfer.files.length) {
+    uploadVideo(event.dataTransfer.files[0]);
+  }
 });
 
-}
-
+fileInput.addEventListener("change", () => {
+  uploadVideo(fileInput.files[0]);
 });
 
-loadVideos();
+cancelButton.addEventListener("click", async () => {
+  if (!currentUpload) return;
 
-// ====== CANCEL UPLOAD ======
-document.getElementById("cancelUpload").onclick = () => {
+  cancelRequested = true;
+  statusText.textContent = "Membatalkan upload...";
+  currentUpload.xhr?.abort();
 
-if(uploadTaskGlobal){
-uploadTaskGlobal.cancel();
-alert("Upload dibatalkan");
+  // Jika belum ada request aktif, loop upload akan melihat cancelRequested.
+});
+
+publishButton.addEventListener("click", async () => {
+  const title = titleInput.value.trim();
+  const affiliate = affiliateInput.value.trim();
+
+  if (!title) {
+    alert("Judul video wajib diisi.");
+    return;
+  }
+
+  if (currentUpload) {
+    alert("Tunggu sampai upload selesai.");
+    return;
+  }
+
+  publishButton.disabled = true;
+
+  try {
+    if (editingId) {
+      await api("/api/admin/videos", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingId,
+          title,
+          affiliate
+        })
+      });
+
+      alert("Perubahan berhasil disimpan.");
+    } else {
+      if (!uploadedVideoKey) {
+        alert("Upload video terlebih dahulu sebelum Publish.");
+        return;
+      }
+
+      await api("/api/admin/videos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          slug: makeSlug(),
+          video_key: uploadedVideoKey,
+          thumbnail_key: uploadedThumbnailKey || null,
+          affiliate
+        })
+      });
+
+      alert("Video berhasil dipublish.");
+    }
+
+    resetForm();
+    await loadVideos();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    publishButton.disabled = false;
+  }
+});
+
+async function loadVideos() {
+  list.textContent = "Memuat daftar video...";
+
+  try {
+    const result = await api("/api/admin/videos");
+    videosCache = result.videos || [];
+    list.replaceChildren();
+
+    if (!videosCache.length) {
+      list.textContent = "Belum ada video.";
+      return;
+    }
+
+    for (const video of videosCache) {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const thumbnail = document.createElement("img");
+      thumbnail.alt = "Thumbnail video";
+      thumbnail.loading = "lazy";
+
+      if (video.thumbnail_key) {
+        thumbnail.src =
+          `/api/admin/thumbnail?key=${encodeURIComponent(video.thumbnail_key)}`;
+      } else {
+        thumbnail.style.display = "none";
+      }
+
+      const heading = document.createElement("h4");
+      heading.textContent = video.title || "(Tanpa judul)";
+
+      const slug = document.createElement("p");
+      slug.style.cssText = "color:#aaa;font-size:12px;";
+      slug.textContent = `Slug: ${video.slug}`;
+
+      const link = document.createElement("a");
+      link.href = `/f/${encodeURIComponent(video.slug)}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.style.cssText = "color:#00aaff;font-size:12px;";
+      link.textContent = `${location.origin}/f/${video.slug}`;
+
+      const actions = document.createElement("div");
+      actions.className = "actions";
+
+      const editButton = document.createElement("button");
+      editButton.className = "edit";
+      editButton.textContent = "Edit";
+      editButton.addEventListener("click", () => {
+        editingId = video.id;
+        titleInput.value = video.title || "";
+        affiliateInput.value = video.affiliate || "";
+        videoUrlInput.value = video.video_key || "";
+        thumbnailUrlInput.value = video.thumbnail_key || "";
+        uploadedVideoKey = "";
+        uploadedThumbnailKey = "";
+        publishButton.textContent = "Simpan Perubahan";
+        titleInput.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "delete";
+      deleteButton.textContent = "Delete";
+      deleteButton.addEventListener("click", async () => {
+        if (!confirm(`Hapus video "${video.title}" beserta file R2-nya?`)) {
+          return;
+        }
+
+        deleteButton.disabled = true;
+
+        try {
+          await api("/api/admin/videos", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: video.id })
+          });
+
+          await loadVideos();
+        } catch (error) {
+          alert(error.message);
+          deleteButton.disabled = false;
+        }
+      });
+
+      actions.append(editButton, deleteButton);
+      card.append(thumbnail, heading, slug, link, actions);
+      list.appendChild(card);
+    }
+  } catch (error) {
+    list.textContent = `Gagal memuat video: ${error.message}`;
+  }
 }
 
-document.getElementById("progress").value = 0;
-document.getElementById("percent").innerText = "0%";
-document.getElementById("previewBox").style.display = "none";
+async function init() {
+  try {
+    await api("/api/admin/me");
+    await loadVideos();
+  } catch (error) {
+    console.error("Inisialisasi dashboard gagal:", error);
+  }
+}
 
-uploadedVideoURL = "";
-uploadedThumbURL = "";
-};
-
+init();
 </script>
+
 
 </body>
 </html>
