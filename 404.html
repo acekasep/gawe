@@ -1,4 +1,3 @@
-```html
 <!doctype html>
 <html lang="id">
 <head>
@@ -133,6 +132,29 @@
       }
     })();
   </script>
+
+<script>
+  // Nonaktifkan menu klik kanan
+  document.addEventListener("contextmenu", function (event) {
+    event.preventDefault();
+  });
+
+  // Blokir beberapa shortcut umum
+  document.addEventListener("keydown", function (event) {
+    const key = event.key.toLowerCase();
+
+    if (
+      event.key === "F12" ||
+      (event.ctrlKey && event.shiftKey &&
+        ["i", "j", "c"].includes(key)) ||
+      (event.ctrlKey && key === "u")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+</script>
+
+
 </body>
 </html>
-```
