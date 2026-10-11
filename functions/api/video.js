@@ -1,7 +1,9 @@
+import { createPlayToken } from "../_lib/play-token.js";
 
 export async function onRequestGet({ request, env }) {
   const url = new URL(request.url);
   const slug = url.searchParams.get("slug");
+  const referer = request.headers.get("Referer");
 
   if (!slug || !/^[a-zA-Z0-9_-]+$/.test(slug)) {
     return Response.json(
@@ -10,8 +12,35 @@ export async function onRequestGet({ request, env }) {
     );
   }
 
+  // Menolak akses langsung tanpa halaman player sebagai referer.
+  try {
+    const ref = new URL(referer || "");
+
+    if (
+      ref.origin !== url.origin ||
+      ref.pathname !== `/f/${slug}`
+    ) {
+      return Response.json(
+        { ok: false, error: "Akses ditolak" },
+        { status: 403 }
+      );
+    }
+  } catch {
+    return Response.json(
+      { ok: false, error: "Akses ditolak" },
+      { status: 403 }
+    );
+  }
+
+  if (!env.PLAY_TOKEN_SECRET) {
+    return Response.json(
+      { ok: false, error: "Konfigurasi token belum tersedia" },
+      { status: 500 }
+    );
+  }
+
   const video = await env.DB.prepare(`
-    SELECT id, title, slug, video_key, thumbnail_key, affiliate
+    SELECT id, title, slug, thumbnail_key, affiliate
     FROM videos
     WHERE slug = ?
     LIMIT 1
@@ -24,21 +53,25 @@ export async function onRequestGet({ request, env }) {
     );
   }
 
+  const token = await createPlayToken(slug, env.PLAY_TOKEN_SECRET);
+  const encodedSlug = encodeURIComponent(slug);
+  const encodedToken = encodeURIComponent(token);
+
   return Response.json({
     ok: true,
     video: {
-      id: video.id,
       title: video.title,
       slug: video.slug,
-      video: `/api/stream?slug=${encodeURIComponent(video.slug)}`,
+      video: `/api/stream?slug=${encodedSlug}&token=${encodedToken}`,
       thumbnail: video.thumbnail_key
-        ? `/api/video-thumbnail?slug=${encodeURIComponent(video.slug)}`
+        ? `/api/video-thumbnail?slug=${encodedSlug}&token=${encodedToken}`
         : null,
       affiliate: video.affiliate || ""
     }
   }, {
     headers: {
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
     }
   });
 }
