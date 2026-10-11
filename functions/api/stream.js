@@ -1,8 +1,28 @@
 
+import { verifyPlayToken } from "../_lib/play-token.js";
 export async function onRequestGet({ request, env }) {
   const url = new URL(request.url);
   const slug = url.searchParams.get("slug");
 
+
+  const token = url.searchParams.get("token");
+
+  const { verifyPlayToken } = await import("../_lib/play-token.js");
+
+  if (
+    !env.PLAY_TOKEN_SECRET ||
+    !(await verifyPlayToken(token, slug, env.PLAY_TOKEN_SECRET))
+  ) {
+    return new Response("Akses ditolak atau token kedaluwarsa", {
+      status: 403,
+      headers: {
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff"
+      }
+    });
+  }
+
+  
   if (!slug || !/^[a-zA-Z0-9_-]+$/.test(slug)) {
     return new Response("Slug tidak valid", { status: 400 });
   }
