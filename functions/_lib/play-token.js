@@ -32,7 +32,7 @@ async function getKey(secret) {
 export async function createPlayToken(slug, secret) {
   const payload = {
     slug,
-    exp: Math.floor(Date.now() / 1000) + 600
+    exp: Math.floor(Date.now() / 1000) + 21600
   };
 
   const encoded = toBase64Url(
