@@ -1,9 +1,8 @@
-
 <!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#000000">
   <title>Video</title>
 
@@ -17,7 +16,8 @@
     }
 
     .player {
-      width: 100vw;
+      width: 100%;
+      height: 100%;
       height: 100dvh;
       display: flex;
       justify-content: center;
@@ -30,7 +30,6 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
-      padding-bottom: env(safe-area-inset-bottom);
     }
 
     #message {
@@ -38,6 +37,10 @@
       font: 16px Arial, sans-serif;
       padding: 24px;
       text-align: center;
+    }
+
+    [hidden] {
+      display: none !important;
     }
   </style>
 </head>
@@ -50,9 +53,10 @@
       controlsList="nodownload noplaybackrate"
       disablePictureInPicture
       playsinline
-      preload="metadata">
-    </video>
-    <div id="message" hidden>Memuat video...</div>
+      preload="metadata"
+    ></video>
+
+    <div id="message" hidden></div>
   </div>
 
   <script>
@@ -69,7 +73,7 @@
       const parts = location.pathname.split("/").filter(Boolean);
       const slug = parts[parts.length - 1];
 
-      if (!slug || slug === "f") {
+      if (!slug || slug === "f" || slug === "404.html") {
         showError("Link video tidak valid.");
         return;
       }
@@ -111,7 +115,10 @@
             try {
               const affiliateUrl = new URL(data.affiliate);
 
-              if (["http:", "https:"].includes(affiliateUrl.protocol)) {
+              if (
+                affiliateUrl.protocol === "https:" ||
+                affiliateUrl.protocol === "http:"
+              ) {
                 location.href = affiliateUrl.href;
               }
             } catch (error) {
@@ -125,5 +132,29 @@
       }
     })();
   </script>
+
+<script>
+  // Nonaktifkan menu klik kanan
+  document.addEventListener("contextmenu", function (event) {
+    event.preventDefault();
+  });
+
+  // Blokir beberapa shortcut umum
+  document.addEventListener("keydown", function (event) {
+    const key = event.key.toLowerCase();
+
+    if (
+      event.key === "F12" ||
+      (event.ctrlKey && event.shiftKey &&
+        ["i", "j", "c"].includes(key)) ||
+      (event.ctrlKey && key === "u")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+</script>
+
+
 </body>
 </html>
